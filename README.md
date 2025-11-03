@@ -41,6 +41,7 @@ build_windows.bat
 `dist\barcode-reader.exe`. Подробный ход выполнения сохраняется в журнал
 `build_windows.log` рядом со скриптом. После сборки программу можно запускать
 напрямую:
+`dist\barcode-reader.exe`. После сборки программу можно запускать напрямую:
 
 ```bat
 dist\barcode-reader.exe path\to\photo.jpg --json
