@@ -1,6 +1,11 @@
 """High level helpers around the Aspose Barcode Cloud SDK."""
 from __future__ import annotations
 
+import base64
+import logging
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable, List, Optional
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional
@@ -27,6 +32,9 @@ except ImportError:  # pragma: no cover
     _NEW_SDK = False
 
 
+logger = logging.getLogger(__name__)
+
+
 @dataclass
 class RecognizedBarcode:
     """A simple representation of the recognition result."""
@@ -46,6 +54,11 @@ class BarcodeReader:
         *,
         base_url: Optional[str] = None,
     ) -> None:
+        logger.debug("Initialising BarcodeReader with base URL: %s", base_url or "default")
+        configuration = self._build_configuration(client_id, client_secret, base_url)
+        self._api_client = ApiClient(configuration)
+        self._barcode_api = BarcodeApi(self._api_client)
+        logger.info("BarcodeReader ready using %s SDK", "new" if _NEW_SDK else "legacy")
         configuration = self._build_configuration(client_id, client_secret, base_url)
         self._api_client = ApiClient(configuration)
         self._barcode_api = BarcodeApi(self._api_client)
@@ -100,6 +113,16 @@ class BarcodeReader:
         path = Path(image_path)
         if not path.exists():
             raise FileNotFoundError(f"Image not found: {path}")
+        logger.info("Scanning image %s", path)
+        image_bytes = path.read_bytes()
+
+        if _NEW_SDK:
+            results = self._scan_with_new_sdk(image_bytes, barcode_types, preset)
+        else:
+            results = self._scan_with_legacy_sdk(image_bytes, barcode_types, preset)
+
+        logger.debug("Scan produced %d result(s)", len(results))
+        return results
 
         image_bytes = path.read_bytes()
 
@@ -115,6 +138,12 @@ class BarcodeReader:
         preset: Optional[str],
     ) -> List[RecognizedBarcode]:
         assert _NEW_SDK
+        filters = list(barcode_types or [])
+        logger.debug(
+            "Executing new SDK scan with %s barcode filter(s) and preset %s",
+            filters if filters else "no",
+            preset or "default",
+        )
         options = ScanBase64Options(
             image=base64.b64encode(image_bytes).decode("ascii"),
             barcode_types=list(barcode_types or []),
@@ -125,6 +154,7 @@ class BarcodeReader:
         request = ScanBase64Request(scan_options=options)
         response = self._barcode_api.scan_base64(request)
         results = getattr(response, "barcodes", None) or getattr(response, "barcode_list", [])
+        logger.debug("Received %d result(s) from new SDK response", len(results))
         return [
             RecognizedBarcode(
                 value=getattr(item, "barcode_value", ""),
@@ -141,6 +171,12 @@ class BarcodeReader:
         preset: Optional[str],
     ) -> List[RecognizedBarcode]:
         assert not _NEW_SDK
+        filters = list(barcode_types or [])
+        logger.debug(
+            "Executing legacy SDK scan with %s barcode filter(s) and preset %s",
+            filters if filters else "no",
+            preset or "default",
+        )
         types_param = None
         if barcode_types:
             types_param = ",".join(barcode_types)
@@ -152,6 +188,7 @@ class BarcodeReader:
         request = PostBarcodeRecognizeFromUrlOrContentRequest(**kwargs)
         response = self._barcode_api.post_barcode_recognize_from_url_or_content(request)
         results = getattr(response, "barcodes", None) or getattr(response, "barcode_list", [])
+        logger.debug("Received %d result(s) from legacy SDK response", len(results))
         return [
             RecognizedBarcode(
                 value=getattr(item, "barcode_value", ""),
@@ -162,6 +199,7 @@ class BarcodeReader:
         ]
 
     def close(self) -> None:
+        logger.debug("Closing BarcodeReader API client")
         self._api_client.close()
 
     def __enter__(self) -> "BarcodeReader":

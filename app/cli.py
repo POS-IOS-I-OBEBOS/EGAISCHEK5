@@ -3,12 +3,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from pathlib import Path
 from typing import Iterable, List
 
 from app.barcode_reader import BarcodeReader
+from app.logging_utils import configure_logging
+
+
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -41,6 +46,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--log-file",
+        type=Path,
+        default=None,
+        help=(
+            "Path to the log file. Defaults to barcode_reader.log in the current working "
+            "directory."
+        ),
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Emit machine readable JSON instead of a human friendly table.",
@@ -54,6 +68,7 @@ def _ensure_credentials(client_id: str | None, client_secret: str | None) -> Non
             "Missing credentials. Either pass --client-id/--client-secret or set "
             "ASPOSE_CLIENT_ID/ASPOSE_CLIENT_SECRET."
         )
+    logger.debug("Credentials verified (client id provided: %s, client secret provided: %s)", bool(client_id), bool(client_secret))
 
 
 def _format_table(results: Iterable[dict]) -> str:
@@ -71,6 +86,16 @@ def main(argv: List[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    log_path = configure_logging(args.log_file)
+    logger.info("Log file initialised at %s", log_path)
+    logger.info("Starting barcode recognition for image %s", args.image)
+    if args.barcode_types:
+        logger.debug("Barcode type filters: %s", ", ".join(args.barcode_types))
+    if args.preset:
+        logger.debug("Recognition preset: %s", args.preset)
+    if args.base_url:
+        logger.debug("Using custom base URL: %s", args.base_url)
+
     _ensure_credentials(args.client_id, args.client_secret)
 
     with BarcodeReader(
@@ -84,6 +109,8 @@ def main(argv: List[str] | None = None) -> int:
             preset=args.preset,
         )
 
+    logger.info("Recognition finished. %d barcode(s) found.", len(results))
+
     payload = [
         {
             "value": item.value,
@@ -94,6 +121,11 @@ def main(argv: List[str] | None = None) -> int:
     ]
 
     if args.json:
+        logger.debug("Writing JSON payload to stdout")
+        json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)
+        sys.stdout.write("\n")
+    else:
+        logger.debug("Writing table output to stdout")
         json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)
         sys.stdout.write("\n")
     else:
