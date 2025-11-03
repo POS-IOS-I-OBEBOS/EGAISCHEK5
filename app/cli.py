@@ -124,6 +124,10 @@ def main(argv: List[str] | None = None) -> int:
         logger.debug("Writing JSON payload to stdout")
         json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)
         sys.stdout.write("\n")
+        return 0
+
+    logger.debug("Writing table output to stdout")
+    sys.stdout.write(_format_table(payload) + "\n")
     else:
         logger.debug("Writing table output to stdout")
         json.dump(payload, sys.stdout, ensure_ascii=False, indent=2)
