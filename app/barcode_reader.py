@@ -6,6 +6,10 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable, List, Optional
+import base64
 
 try:  # pragma: no cover - import resolution depends on SDK version
     from aspose_barcode_cloud import (  # type: ignore
@@ -55,6 +59,9 @@ class BarcodeReader:
         self._api_client = ApiClient(configuration)
         self._barcode_api = BarcodeApi(self._api_client)
         logger.info("BarcodeReader ready using %s SDK", "new" if _NEW_SDK else "legacy")
+        configuration = self._build_configuration(client_id, client_secret, base_url)
+        self._api_client = ApiClient(configuration)
+        self._barcode_api = BarcodeApi(self._api_client)
 
     @staticmethod
     def _build_configuration(
@@ -116,6 +123,12 @@ class BarcodeReader:
 
         logger.debug("Scan produced %d result(s)", len(results))
         return results
+
+        image_bytes = path.read_bytes()
+
+        if _NEW_SDK:
+            return self._scan_with_new_sdk(image_bytes, barcode_types, preset)
+        return self._scan_with_legacy_sdk(image_bytes, barcode_types, preset)
 
     # ------------------------------------------------------------------
     def _scan_with_new_sdk(
