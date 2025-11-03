@@ -1,0 +1,2 @@
+aspose-barcode-cloud==25.10.0
+pyinstaller==6.3.0
